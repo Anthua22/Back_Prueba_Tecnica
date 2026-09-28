@@ -1,5 +1,6 @@
 package com.example.similarproducts.client;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -7,12 +8,14 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import com.example.similarproducts.exception.ProductNotFoundException;
 import com.example.similarproducts.model.ProductDetail;
 
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 /** Cliente de las APIs existentes (puerto 3001). */
 @Component
@@ -32,7 +35,11 @@ public class ProductClient {
                 .onStatus(status -> status.isSameCodeAs(HttpStatus.NOT_FOUND),
                         response -> Mono.error(new ProductNotFoundException(productId)))
                 .bodyToMono(new ParameterizedTypeReference<List<String>>() {})
-                .defaultIfEmpty(List.of());
+                .defaultIfEmpty(List.of())
+                .retryWhen(Retry.backoff(2, Duration.ofMillis(100))
+                        .filter(e -> e instanceof WebClientRequestException
+                                || (e instanceof WebClientResponseException w && w.getStatusCode().is5xxServerError()))
+                        .onRetryExhaustedThrow((spec, signal) -> signal.failure()));
     }
 
     /**

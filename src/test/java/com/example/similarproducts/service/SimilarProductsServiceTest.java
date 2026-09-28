@@ -68,13 +68,13 @@ class SimilarProductsServiceTest {
     }
 
     @Test
-    void doesNotCacheFailures() {
+    void skipsRecentlyFailedProductsWithoutCallingAgain() {
         when(client.getSimilarIds("10")).thenReturn(Mono.just(List.of("1")));
-        when(client.getProduct("1"))
-                .thenReturn(Mono.error(new RuntimeException("timeout")))
-                .thenReturn(Mono.just(Optional.of(p1)));
+        when(client.getProduct("1")).thenReturn(Mono.error(new RuntimeException("timeout")));
 
         assertThat(service.getSimilarProducts("10").block()).isEmpty();
-        assertThat(service.getSimilarProducts("10").block()).containsExactly(p1);
+        assertThat(service.getSimilarProducts("10").block()).isEmpty();
+
+        verify(client, times(1)).getProduct("1");
     }
 }
